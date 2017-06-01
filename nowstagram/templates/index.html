@@ -29,7 +29,6 @@
                         <span> 条评论</span></a>
                 </li>
                 {% for comment in image.comments: %}
-                {% if loop.index > 2 %} {% break %} {% endif %}
                 <li>
                     <!-- <a class=" icon-remove" title="删除评论"></a> -->
                     <a class="_4zhc5 _iqaka" title="zjuyxy" href="/profile/{{comment.user_id}}" data-reactid=".0.1.0.0.0.2.1.2:$comment-17856951190001917.1">{{comment.user.username}}</a>
@@ -39,14 +38,22 @@
                 </li>
                 {%endfor%}
             </ul>
+            <!--
             <section class="discuss-edit">
-                <form>
-                    <input placeholder="添加评论..." type="text">
-                </form>
-                <button class="more-info">提交</button>
+                <input placeholder="添加评论..." id="jsCmt{{image.id}}" imageId = "imageId{{image.id}}" type="text">
+                <button class="more-info" id="jsSubmit{{image.id}}">提交</button>
             </section>
+            -->
         </div>
     </article>
-{% endfor %}
+
+
+    {% endfor %}
 </div>
+{% endblock%}
+
+{% block js %}
+
+<script type="text/javascript" src="/static/js/jquery.js"></script>
+<script type="text/javascript" src="/static/js/comment.js"></script>
 {% endblock%}

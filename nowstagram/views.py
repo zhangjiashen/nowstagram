@@ -1,16 +1,19 @@
 # -*- encoding=UTF-8 -*-
 
 from nowstagram import app,db
-from flask import render_template, redirect, request, flash,get_flashed_messages
-from models import Image, User
-import random, hashlib, json
+from flask import render_template, redirect, request, flash,get_flashed_messages, send_from_directory
+from models import Image, User, Comment
+import random, hashlib, json, os, uuid
 from flask_login import login_user, logout_user, current_user, login_required
+from qiniusdk import qiniu_upload_file
+
 @app.route('/')
 def index():
     images = Image.query.limit(10).all()
     return render_template('index.html', images=images)
 
 @app.route('/image/<int:image_id>/')
+@login_required
 def image(image_id):
     image= Image.query.get(image_id)
     if image == None:
@@ -117,3 +120,73 @@ def reg():
 def logout():
     logout_user()
     return redirect('/')
+
+def save_to_local(file, file_name):
+    save_dir = app.config['UPLOAD_DIR']
+    file.save(os.path.join(save_dir, file_name))
+    return '/image/'+ file_name
+
+@app.route('/image/<image_name>')
+def view_image(image_name):
+    return send_from_directory(app.config['UPLOAD_DIR'],image_name)
+
+
+@app.route('/upload/', methods={'post'})
+@login_required
+def upload():
+    print type(request.files)
+    file = request.files['file']
+    dir(file)
+    file_ext = ''
+    if file.filename.find('.') > 0:
+        file_ext = file.filename.rsplit('.',1)[1].strip().lower()
+        print file_ext
+    if file_ext in app.config['ALLOWED_EXT']:
+        file_name = str(uuid.uuid1()).replace('-','') + '.' + file_ext
+        #url = save_to_local(file, file_name)
+        url = qiniu_upload_file(file, file_name)
+        print 1, url
+        if url != None:
+            print current_user.id
+            db.session.add(Image(url, current_user.id ))
+            db.session.commit()
+    return redirect('/profile/%d' % current_user.id)
+
+
+@app.route('/addcomment/', methods={'post'})
+@login_required
+def add_comment():
+    image_id = int(request.values['image_id'])
+    content = request.values['content']
+    comment = Comment(content, image_id, current_user.id)
+    db.session.add(comment)
+    db.session.commit()
+    return json.dumps({"code":0,"id":comment.id,
+                       "content":content,
+                       "username":comment.user.username,
+                       "user_id":comment.user.id})
+
+
+@app.route('/index/images/<int:page>/<int:per_page>/')
+def index_images(page, per_page):
+    paginate = Image.query.order_by(db.desc(Image.id)).paginate(page=page, per_page=per_page, error_out=False)
+    map = {'has_next': paginate.has_next}
+    images = []
+    for image in paginate.items:
+        comments = []
+        for i in range(0, min(2, len(image.comments))):
+            comment = image.comments[i]
+            comments.append({'username':comment.user.username,
+                             'user_id':comment.user_id,
+                             'content':comment.content})
+        imgvo = {'id': image.id,
+                 'url': image.url,
+                 'comment_count': len(image.comments),
+                 'user_id': image.user_id,
+                 'head_url':image.user.head_url,
+                 'created_date':str(image.created_date),
+                 'comments':comments}
+        images.append(imgvo)
+
+    map['images'] = images
+    return json.dumps(map)
